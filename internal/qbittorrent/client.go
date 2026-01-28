@@ -147,9 +147,9 @@ func (c *Client) GetTorrentFiles(ctx context.Context, hash string) ([]models.Tor
 	// Convert qBittorrent files to our model
 	files := make([]models.TorrentFile, 0, len(*qbtFiles))
 	for _, f := range *qbtFiles {
-		// Build the full file path: savePath + torrentName + file.Name
-		// The file.Name from qBittorrent is relative to the torrent root
-		fullPath := filepath.Join(savePath, torrentName, f.Name)
+		// Build the full file path: savePath + file.Name
+		// qBittorrent's file.Name is relative to savePath (includes torrent folder for multi-file torrents)
+		fullPath := filepath.Join(savePath, f.Name)
 
 		files = append(files, models.TorrentFile{
 			TorrentHash: hash,

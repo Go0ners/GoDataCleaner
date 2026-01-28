@@ -11,27 +11,27 @@ type Torrent struct {
 
 // TorrentFile represents a file within a torrent.
 type TorrentFile struct {
-	TorrentHash string
-	TorrentName string
-	FileName    string
-	FilePath    string
-	Size        int64
+	TorrentHash string `json:"torrent_hash"`
+	TorrentName string `json:"torrent_name"`
+	FileName    string `json:"file_name"`
+	FilePath    string `json:"file_path"`
+	Size        int64  `json:"size"`
 }
 
 // LocalFile represents a file found on the local filesystem.
 type LocalFile struct {
-	FilePath string
-	FileName string
-	Size     int64
-	Category string // "4k", "movies", "shows"
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	Size     int64  `json:"size"`
+	Category string `json:"category"`
 }
 
 // OrphanFile represents a local file that is not present in the torrent database.
 type OrphanFile struct {
-	FilePath string
-	FileName string
-	Size     int64
-	Category string
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	Size     int64  `json:"size"`
+	Category string `json:"category"`
 }
 
 // Stats represents global statistics for torrents.

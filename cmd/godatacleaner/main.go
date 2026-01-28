@@ -81,25 +81,29 @@ func runSync() {
 		if err != nil {
 			log.Printf("⚠️  Erreur récupération torrents: %v", err)
 		} else {
-			log.Printf("📦 %d torrents trouvés", len(torrents))
+			total := len(torrents)
+			fmt.Printf("📦 %d torrents trouvés\n", total)
 			var allFiles []models.TorrentFile
-			for _, t := range torrents {
+			for i, t := range torrents {
 				files, err := qbtClient.GetTorrentFiles(ctx, t.Hash)
 				if err != nil {
-					log.Printf("⚠️  Erreur fichiers torrent %s: %v", t.Name, err)
 					continue
 				}
 				allFiles = append(allFiles, files...)
+				// Progress on single line
+				percent := float64(i+1) / float64(total) * 100
+				fmt.Printf("\r⏳ Progression: %d/%d (%.1f%%) - %d fichiers", i+1, total, percent, len(allFiles))
 			}
+			fmt.Println() // New line after progress
 			if err := store.InsertTorrentFiles(ctx, allFiles); err != nil {
 				log.Fatalf("Erreur insertion fichiers torrents: %v", err)
 			}
-			log.Printf("✅ %d fichiers torrents synchronisés", len(allFiles))
+			fmt.Printf("✅ %d fichiers torrents synchronisés\n", len(allFiles))
 		}
 	}
 
 	// Sync local
-	log.Println("🔄 Scan des fichiers locaux...")
+	fmt.Println("🔄 Scan des fichiers locaux...")
 	if err := store.ClearLocalFiles(ctx); err != nil {
 		log.Fatalf("Erreur clear local_files: %v", err)
 	}
@@ -108,19 +112,26 @@ func runSync() {
 	filesChan, errsChan := scan.Scan(ctx)
 
 	var localFiles []models.LocalFile
+	count := 0
 	for f := range filesChan {
 		localFiles = append(localFiles, f)
+		count++
+		if count%100 == 0 {
+			fmt.Printf("\r⏳ Scan: %d fichiers trouvés", count)
+		}
 	}
+	fmt.Println() // New line after progress
 	if err := <-errsChan; err != nil {
 		log.Printf("⚠️  Erreur scan: %v", err)
 	}
 
+	fmt.Printf("💾 Insertion de %d fichiers en base...\n", len(localFiles))
 	if err := store.InsertLocalFiles(ctx, localFiles); err != nil {
 		log.Fatalf("Erreur insertion fichiers locaux: %v", err)
 	}
-	log.Printf("✅ %d fichiers locaux synchronisés", len(localFiles))
+	fmt.Printf("✅ %d fichiers locaux synchronisés\n", len(localFiles))
 
-	log.Println("🎉 Synchronisation terminée!")
+	fmt.Println("🎉 Synchronisation terminée!")
 }
 
 func runWeb() {

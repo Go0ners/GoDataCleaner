@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"godatacleaner/internal/models"
@@ -54,6 +55,7 @@ func (s *Storage) Initialize(ctx context.Context) error {
 			torrent_name TEXT NOT NULL,
 			file_name TEXT NOT NULL,
 			file_path TEXT NOT NULL,
+			relative_path TEXT NOT NULL,
 			size INTEGER NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -63,12 +65,15 @@ func (s *Storage) Initialize(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_torrent_file_path ON torrent_files(file_path)`,
 		// Index sur file_name
 		`CREATE INDEX IF NOT EXISTS idx_torrent_file_name ON torrent_files(file_name)`,
+		// Index sur relative_path pour les JOINs orphelins
+		`CREATE INDEX IF NOT EXISTS idx_torrent_relative_path ON torrent_files(relative_path)`,
 
 		// Table des fichiers locaux
 		`CREATE TABLE IF NOT EXISTS local_files (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			file_path TEXT NOT NULL UNIQUE,
 			file_name TEXT NOT NULL,
+			relative_path TEXT NOT NULL,
 			size INTEGER NOT NULL,
 			category TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -79,6 +84,8 @@ func (s *Storage) Initialize(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_local_category ON local_files(category)`,
 		// Index sur file_name
 		`CREATE INDEX IF NOT EXISTS idx_local_file_name ON local_files(file_name)`,
+		// Index sur relative_path pour les JOINs orphelins
+		`CREATE INDEX IF NOT EXISTS idx_local_relative_path ON local_files(relative_path)`,
 	}
 
 	for _, stmt := range statements {
@@ -88,6 +95,27 @@ func (s *Storage) Initialize(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// extractRelativePath extracts the relative path from a full path.
+// It looks for /movies/, /shows/, or /4k/ and returns the path from that point.
+// If none found, returns the original path.
+func extractRelativePath(fullPath string) string {
+	markers := []string{"/movies/", "/shows/", "/4k/"}
+	for _, marker := range markers {
+		if idx := strings.Index(fullPath, marker); idx != -1 {
+			return fullPath[idx:]
+		}
+	}
+	return fullPath
+}
+
+// normalizeLocalPath removes the /mnt prefix from local paths to match torrent paths.
+func normalizeLocalPath(path string) string {
+	if strings.HasPrefix(path, "/mnt") {
+		return path[4:] // Remove "/mnt"
+	}
+	return path
 }
 
 // InsertTorrentFiles inserts torrent files in batches using prepared statements.
@@ -106,8 +134,8 @@ func (s *Storage) InsertTorrentFiles(ctx context.Context, files []models.Torrent
 
 	// Prepare the insert statement
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO torrent_files (torrent_hash, torrent_name, file_name, file_path, size)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO torrent_files (torrent_hash, torrent_name, file_name, file_path, relative_path, size)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -123,7 +151,8 @@ func (s *Storage) InsertTorrentFiles(ctx context.Context, files []models.Torrent
 
 		// Insert each file in the current batch
 		for _, file := range files[i:end] {
-			_, err := stmt.ExecContext(ctx, file.TorrentHash, file.TorrentName, file.FileName, file.FilePath, file.Size)
+			relativePath := extractRelativePath(file.FilePath)
+			_, err := stmt.ExecContext(ctx, file.TorrentHash, file.TorrentName, file.FileName, file.FilePath, relativePath, file.Size)
 			if err != nil {
 				return fmt.Errorf("failed to insert torrent file: %w", err)
 			}
@@ -154,8 +183,8 @@ func (s *Storage) InsertLocalFiles(ctx context.Context, files []models.LocalFile
 
 	// Prepare the insert statement with INSERT OR REPLACE for UNIQUE constraint on file_path
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT OR REPLACE INTO local_files (file_path, file_name, size, category)
-		VALUES (?, ?, ?, ?)
+		INSERT OR REPLACE INTO local_files (file_path, file_name, relative_path, size, category)
+		VALUES (?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -171,7 +200,10 @@ func (s *Storage) InsertLocalFiles(ctx context.Context, files []models.LocalFile
 
 		// Insert each file in the current batch
 		for _, file := range files[i:end] {
-			_, err := stmt.ExecContext(ctx, file.FilePath, file.FileName, file.Size, file.Category)
+			// Normalize path by removing /mnt prefix
+			normalizedPath := normalizeLocalPath(file.FilePath)
+			relativePath := extractRelativePath(normalizedPath)
+			_, err := stmt.ExecContext(ctx, normalizedPath, file.FileName, relativePath, file.Size, file.Category)
 			if err != nil {
 				return fmt.Errorf("failed to insert local file: %w", err)
 			}
@@ -386,12 +418,13 @@ func (s *Storage) GetLocalFiles(ctx context.Context, opts models.QueryOptions) (
 }
 
 // GetOrphanFiles retrieves orphan files (local files not present in torrent_files) with pagination.
+// Comparison is done on relative_path column which is pre-computed and indexed.
 func (s *Storage) GetOrphanFiles(ctx context.Context, opts models.QueryOptions) ([]models.OrphanFile, int64, error) {
 	opts = normalizeQueryOptions(opts)
 
 	// Build WHERE clause for search and category filtering
-	// Base condition: t.file_path IS NULL (orphan detection via LEFT JOIN)
-	conditions := []string{"t.file_path IS NULL"}
+	// Base condition: no matching torrent file (orphan detection via LEFT JOIN on relative_path)
+	conditions := []string{"t.relative_path IS NULL"}
 	var args []interface{}
 
 	if opts.Search != "" {
@@ -414,7 +447,7 @@ func (s *Storage) GetOrphanFiles(ctx context.Context, opts models.QueryOptions) 
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*) 
 		FROM local_files l
-		LEFT JOIN torrent_files t ON l.file_path = t.file_path
+		LEFT JOIN torrent_files t ON l.relative_path = t.relative_path
 		%s`, whereClause)
 
 	var total int64
@@ -435,11 +468,11 @@ func (s *Storage) GetOrphanFiles(ctx context.Context, opts models.QueryOptions) 
 	// Calculate offset for pagination
 	offset := (opts.Page - 1) * opts.PerPage
 
-	// Build and execute the main query using LEFT JOIN as per design.md
+	// Build and execute the main query using LEFT JOIN on relative_path
 	query := fmt.Sprintf(`
 		SELECT l.file_path, l.file_name, l.size, l.category
 		FROM local_files l
-		LEFT JOIN torrent_files t ON l.file_path = t.file_path
+		LEFT JOIN torrent_files t ON l.relative_path = t.relative_path
 		%s
 		%s
 		LIMIT ? OFFSET ?`, whereClause, orderClause)
@@ -524,7 +557,7 @@ func (s *Storage) GetLocalStats(ctx context.Context) ([]models.CategoryStats, er
 }
 
 // GetOrphanStats returns orphan file statistics by category.
-// Uses LEFT JOIN WHERE NULL to identify orphans, then groups by category.
+// Uses LEFT JOIN on relative_path column which is pre-computed and indexed.
 func (s *Storage) GetOrphanStats(ctx context.Context) ([]models.CategoryStats, error) {
 	query := `
 		SELECT 
@@ -532,8 +565,8 @@ func (s *Storage) GetOrphanStats(ctx context.Context) ([]models.CategoryStats, e
 			COUNT(*) as file_count,
 			COALESCE(SUM(l.size), 0) as total_size
 		FROM local_files l
-		LEFT JOIN torrent_files t ON l.file_path = t.file_path
-		WHERE t.file_path IS NULL
+		LEFT JOIN torrent_files t ON l.relative_path = t.relative_path
+		WHERE t.relative_path IS NULL
 		GROUP BY l.category
 		ORDER BY l.category ASC
 	`
