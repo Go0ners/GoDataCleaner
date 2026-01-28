@@ -90,3 +90,15 @@ type FolderStatsResponse struct {
 type CategoryStatsResponse struct {
 	Categories []CategoryStats `json:"categories"`
 }
+
+// ExtensionStats represents statistics for a specific file extension.
+type ExtensionStats struct {
+	Extension string `json:"extension"`
+	FileCount int64  `json:"file_count"`
+	TotalSize int64  `json:"total_size"`
+}
+
+// ExtensionStatsResponse represents the API response for extension statistics.
+type ExtensionStatsResponse struct {
+	Extensions []ExtensionStats `json:"extensions"`
+}

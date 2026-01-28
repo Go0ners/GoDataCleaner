@@ -49,6 +49,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/orphans/stats", s.handleOrphanStats)
 	mux.HandleFunc("GET /api/orphans/export", s.handleOrphanExport)
 
+	// Configure routes for Unknown extensions API
+	mux.HandleFunc("GET /api/unknown/extensions", s.handleUnknownExtensions)
+
 	// Build the server address
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 

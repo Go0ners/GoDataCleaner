@@ -646,6 +646,45 @@ func (s *Storage) GetFolderStats(ctx context.Context, table string) ([]models.Fo
 	return stats, nil
 }
 
+// GetUnknownExtensionStats returns statistics for unknown files grouped by extension.
+func (s *Storage) GetUnknownExtensionStats(ctx context.Context) ([]models.ExtensionStats, error) {
+	query := `
+		SELECT 
+			LOWER(CASE 
+				WHEN instr(file_name, '.') > 0 THEN substr(file_name, -instr(reverse(file_name), '.') + 1)
+				ELSE 'no_extension'
+			END) as extension,
+			COUNT(*) as file_count,
+			COALESCE(SUM(size), 0) as total_size
+		FROM local_files
+		WHERE category = 'unknown'
+		GROUP BY extension
+		ORDER BY total_size DESC
+		LIMIT 20
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query extension stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []models.ExtensionStats
+	for rows.Next() {
+		var es models.ExtensionStats
+		if err := rows.Scan(&es.Extension, &es.FileCount, &es.TotalSize); err != nil {
+			return nil, fmt.Errorf("failed to scan extension stats: %w", err)
+		}
+		stats = append(stats, es)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating extension stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 // Close closes the database connection.
 func (s *Storage) Close() error {
 	if s.db != nil {
