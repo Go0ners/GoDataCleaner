@@ -23,7 +23,7 @@ const (
 	DefaultQBittorrentMaxWorkers = 10
 	DefaultSQLitePath            = "./data/torrents.db"
 	DefaultSQLiteBatchSize       = 1000
-	DefaultLocalPath             = "./bin/data/torrents"
+	DefaultLocalPath             = "./data/torrents"
 )
 
 // Error definitions for configuration validation
@@ -199,6 +199,13 @@ func (c *Config) Validate() error {
 
 // QBittorrentURL returns the full qBittorrent server URL.
 func (c *Config) QBittorrentURL() string {
+	// Don't include port 80 explicitly as it can cause auth issues with some servers
+	if c.QBittorrentPort == 80 {
+		return fmt.Sprintf("http://%s", c.QBittorrentHost)
+	}
+	if c.QBittorrentPort == 443 {
+		return fmt.Sprintf("https://%s", c.QBittorrentHost)
+	}
 	return fmt.Sprintf("http://%s:%d", c.QBittorrentHost, c.QBittorrentPort)
 }
 

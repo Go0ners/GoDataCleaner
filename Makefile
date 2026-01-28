@@ -83,7 +83,7 @@ build-linux-amd64:
 	@echo "Building for Linux AMD64..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=$(CGO_ENABLED) \
-		CC=x86_64-linux-musl-gcc \
+		CC=x86_64-unknown-linux-gnu-gcc \
 		$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/godatacleaner
 
 # Linux ARM64
@@ -91,7 +91,7 @@ build-linux-arm64:
 	@echo "Building for Linux ARM64..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=$(CGO_ENABLED) \
-		CC=aarch64-linux-musl-gcc \
+		CC=aarch64-unknown-linux-gnu-gcc \
 		$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/godatacleaner
 
 # macOS AMD64 (Intel)

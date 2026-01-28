@@ -24,7 +24,30 @@ Application CLI en Go pour indexer et gérer les fichiers de torrents qBittorren
 make build
 ```
 
-Le binaire sera créé dans `./bin/godatacleaner`
+Le binaire sera créé dans `./build/godatacleaner`
+
+### Cross-compilation
+
+Builds disponibles pour plusieurs plateformes :
+
+```bash
+make build-linux-amd64    # Linux 64-bit
+make build-linux-arm64    # Linux ARM64
+make build-darwin-amd64   # macOS Intel
+make build-darwin-arm64   # macOS Apple Silicon
+make build-windows-amd64  # Windows 64-bit
+make build-all            # Toutes les plateformes
+```
+
+**Note** : La cross-compilation nécessite des cross-compilers C (CGO requis pour SQLite) :
+
+```bash
+# macOS : installer les cross-compilers via Homebrew
+brew tap messense/macos-cross-toolchains
+brew install x86_64-unknown-linux-gnu    # pour Linux AMD64
+brew install aarch64-unknown-linux-gnu   # pour Linux ARM64
+brew install mingw-w64                   # pour Windows
+```
 
 ## Utilisation
 
@@ -32,16 +55,16 @@ Le binaire sera créé dans `./bin/godatacleaner`
 
 ```bash
 # Synchroniser les données qBittorrent et les fichiers locaux vers SQLite
-./bin/godatacleaner sync
+./build/godatacleaner sync
 
 # Démarrer le serveur WebUI
-./bin/godatacleaner web
+./build/godatacleaner web
 
 # Afficher les statistiques
-./bin/godatacleaner stats
+./build/godatacleaner stats
 
 # Afficher l'aide
-./bin/godatacleaner help
+./build/godatacleaner help
 ```
 
 ### Configuration
@@ -85,7 +108,7 @@ Créez un fichier `config.json` à la racine du projet (ou spécifiez le chemin 
 | `QBITTORRENT_MAX_WORKERS` | 10 | Workers parallèles pour la sync |
 | `SQLITE_PATH` | ./data/torrents.db | Chemin de la base SQLite |
 | `SQLITE_BATCH_SIZE` | 1000 | Taille des lots d'insertion |
-| `LOCAL_PATH` | ./bin/data/torrents | Répertoire à scanner |
+| `LOCAL_PATH` | ./data/torrents | Répertoire à scanner |
 
 ### Exemple
 
@@ -93,18 +116,18 @@ Créez un fichier `config.json` à la racine du projet (ou spécifiez le chemin 
 # Option 1 : Utiliser un fichier config.json
 cp config.example.json config.json
 # Éditer config.json avec vos paramètres
-./bin/godatacleaner sync
+./build/godatacleaner sync
 
 # Option 2 : Utiliser les variables d'environnement
 export QBITTORRENT_HOST=192.168.1.100
 export QBITTORRENT_PORT=8080
 export LOCAL_PATH=/mnt/media
-./bin/godatacleaner sync
+./build/godatacleaner sync
 
 # Option 3 : Mixer les deux (env vars ont la priorité)
 # config.json contient la config de base
 # Les env vars permettent de surcharger ponctuellement
-LOCAL_PORT=8080 ./bin/godatacleaner web
+LOCAL_PORT=8080 ./build/godatacleaner web
 # Ouvrir http://localhost:8080
 ```
 

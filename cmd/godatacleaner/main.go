@@ -235,5 +235,5 @@ func printHelp() {
 	fmt.Println("  QBITTORRENT_USERNAME    Utilisateur (défaut: admin)")
 	fmt.Println("  QBITTORRENT_PASSWORD    Mot de passe (défaut: adminadmin)")
 	fmt.Println("  SQLITE_PATH             Chemin de la DB (défaut: ./data/torrents.db)")
-	fmt.Println("  LOCAL_PATH              Chemin à scanner (défaut: ./bin/data/torrents)")
+	fmt.Println("  LOCAL_PATH              Chemin à scanner (défaut: ./data/torrents)")
 }
