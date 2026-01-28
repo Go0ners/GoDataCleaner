@@ -1,0 +1,27 @@
+# Binaires
+bin/
+*.exe
+
+# Base de données
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Configuration locale
+config.json
+
+# Go
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.kiro
+
+# OS
+.DS_Store
+Thumbs.db

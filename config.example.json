@@ -1,0 +1,12 @@
+{
+  "local_host": "localhost",
+  "local_port": 61913,
+  "qbittorrent_host": "qbt.home",
+  "qbittorrent_port": 80,
+  "qbittorrent_username": "admin",
+  "qbittorrent_password": "adminadmin",
+  "qbittorrent_max_workers": 10,
+  "sqlite_path": "./torrents.db",
+  "sqlite_batch_size": 1000,
+  "local_path": "/mnt/data/torrents/"
+}
