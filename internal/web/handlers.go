@@ -40,6 +40,9 @@ func parseQueryOptions(r *http.Request) models.QueryOptions {
 	if c := r.URL.Query().Get("category"); c != "" {
 		opts.Category = c
 	}
+	if u := r.URL.Query().Get("unique"); u == "true" {
+		opts.Unique = true
+	}
 	return opts
 }
 
@@ -77,7 +80,8 @@ func (s *Server) handleTorrentFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTorrentStats(w http.ResponseWriter, r *http.Request) {
-	stats, err := s.storage.GetTorrentStats(context.Background())
+	unique := r.URL.Query().Get("unique") == "true"
+	stats, err := s.storage.GetTorrentStats(context.Background(), unique)
 	if err != nil {
 		writeError(w, 500, "Failed to get torrent stats")
 		return
@@ -179,7 +183,7 @@ func (s *Server) handleUnknownExtensions(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleOrphanExport(w http.ResponseWriter, r *http.Request) {
 	// Get all orphan files (no pagination for export)
-	opts := models.QueryOptions{Page: 1, PerPage: 100000}
+	opts := models.QueryOptions{Page: 1, PerPage: 1000000}
 	files, _, err := s.storage.GetOrphanFiles(context.Background(), opts)
 	if err != nil {
 		writeError(w, 500, "Failed to get orphan files")

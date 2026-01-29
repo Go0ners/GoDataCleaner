@@ -132,12 +132,13 @@ const indexTemplate = `<!DOCTYPE html>
             const [sort, setSort] = useState('size');
             const [order, setOrder] = useState('desc');
             const [loading, setLoading] = useState(true);
+            const [unique, setUnique] = useState(true);
 
             useEffect(() => {
                 let ignore = false;
                 setLoading(true);
-                fetch('/api/torrent/stats').then(r => r.json()).then(d => { if (!ignore) setStats(d); });
-                fetch('/api/torrent/files?page=' + page + '&per_page=50&sort=' + sort + '&order=' + order + '&search=' + encodeURIComponent(search))
+                fetch('/api/torrent/stats?unique=' + unique).then(r => r.json()).then(d => { if (!ignore) setStats(d); });
+                fetch('/api/torrent/files?page=' + page + '&per_page=50&sort=' + sort + '&order=' + order + '&search=' + encodeURIComponent(search) + '&unique=' + unique)
                     .then(r => r.json())
                     .then(d => {
                         if (!ignore) {
@@ -147,7 +148,7 @@ const indexTemplate = `<!DOCTYPE html>
                         }
                     });
                 return () => { ignore = true; };
-            }, [page, sort, order, search]);
+            }, [page, sort, order, search, unique]);
 
             const handleSort = (col) => {
                 if (sort === col) setOrder(order === 'asc' ? 'desc' : 'asc');
@@ -166,11 +167,15 @@ const indexTemplate = `<!DOCTYPE html>
                 <div>
                     <div className="cards">
                         <Card title="Torrents" value={(stats.total_torrents || 0).toLocaleString()} />
-                        <Card title="Fichiers" value={(stats.total_files || 0).toLocaleString()} />
+                        <Card title="Fichiers" value={(stats.total_files || 0).toLocaleString()} sub={unique ? 'uniques' : 'total'} />
                         <Card title="Poids total" value={formatSize(stats.total_size || 0)} />
                     </div>
                     <div className="controls">
                         <input className="search" placeholder="Rechercher..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+                        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 15px', background: '#16213e', borderRadius: '8px', border: '1px solid #333'}}>
+                            <input type="checkbox" checked={unique} onChange={e => { setUnique(e.target.checked); setPage(1); }} style={{cursor: 'pointer'}} />
+                            <span style={{color: unique ? '#00d9ff' : '#888', fontSize: '14px'}}>Fichiers uniques</span>
+                        </label>
                     </div>
                     <DataTable data={data} columns={columns} sort={sort} order={order} onSort={handleSort} loading={loading} />
                     <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />

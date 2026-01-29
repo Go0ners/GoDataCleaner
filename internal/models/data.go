@@ -63,6 +63,7 @@ type QueryOptions struct {
 	Order    string // "asc" ou "desc"
 	Search   string
 	Category string
+	Unique   bool // Filter unique files only (by relative_path)
 }
 
 // PaginatedResponse represents a paginated API response.

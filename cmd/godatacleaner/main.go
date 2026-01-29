@@ -173,7 +173,7 @@ func runStats() {
 	ctx := context.Background()
 
 	// Stats torrents
-	torrentStats, err := store.GetTorrentStats(ctx)
+	torrentStats, err := store.GetTorrentStats(ctx, false)
 	if err != nil {
 		log.Fatalf("Erreur stats torrents: %v", err)
 	}

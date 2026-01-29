@@ -271,8 +271,9 @@ func normalizeQueryOptions(opts models.QueryOptions) models.QueryOptions {
 	if opts.PerPage < 1 {
 		opts.PerPage = 100
 	}
-	if opts.PerPage > 1000 {
-		opts.PerPage = 1000
+	// Cap at 1000 for normal API calls, but allow higher for exports
+	if opts.PerPage > 1000000 {
+		opts.PerPage = 1000000
 	}
 	// Normalize order to lowercase
 	if opts.Order != "asc" && opts.Order != "desc" {
@@ -294,8 +295,26 @@ func (s *Storage) GetTorrentFiles(ctx context.Context, opts models.QueryOptions)
 		args = append(args, searchPattern, searchPattern)
 	}
 
+	// Handle unique mode - use subquery to get distinct relative_path
+	var fromClause string
+	var countQuery string
+	var query string
+
+	if opts.Unique {
+		// Subquery to get one row per unique relative_path (the one with smallest id)
+		subquery := `(SELECT * FROM torrent_files WHERE id IN (SELECT MIN(id) FROM torrent_files GROUP BY relative_path))`
+		fromClause = subquery + " AS t"
+		if whereClause != "" {
+			whereClause = strings.Replace(whereClause, "file_name", "t.file_name", -1)
+			whereClause = strings.Replace(whereClause, "file_path", "t.file_path", -1)
+		}
+		countQuery = "SELECT COUNT(*) FROM " + fromClause + " " + whereClause
+	} else {
+		fromClause = "torrent_files"
+		countQuery = "SELECT COUNT(*) FROM " + fromClause + " " + whereClause
+	}
+
 	// Count total matching records
-	countQuery := "SELECT COUNT(*) FROM torrent_files " + whereClause
 	var total int64
 	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -306,7 +325,11 @@ func (s *Storage) GetTorrentFiles(ctx context.Context, opts models.QueryOptions)
 	orderClause := "ORDER BY id ASC"
 	if opts.Sort != "" {
 		if col, ok := allowedTorrentColumns[opts.Sort]; ok {
-			orderClause = fmt.Sprintf("ORDER BY %s %s", col, opts.Order)
+			if opts.Unique {
+				orderClause = fmt.Sprintf("ORDER BY t.%s %s", col, opts.Order)
+			} else {
+				orderClause = fmt.Sprintf("ORDER BY %s %s", col, opts.Order)
+			}
 		}
 	}
 
@@ -314,10 +337,17 @@ func (s *Storage) GetTorrentFiles(ctx context.Context, opts models.QueryOptions)
 	offset := (opts.Page - 1) * opts.PerPage
 
 	// Build and execute the main query
-	query := fmt.Sprintf(
-		"SELECT torrent_hash, torrent_name, file_name, file_path, size FROM torrent_files %s %s LIMIT ? OFFSET ?",
-		whereClause, orderClause,
-	)
+	if opts.Unique {
+		query = fmt.Sprintf(
+			"SELECT t.torrent_hash, t.torrent_name, t.file_name, t.file_path, t.size FROM %s %s %s LIMIT ? OFFSET ?",
+			fromClause, whereClause, orderClause,
+		)
+	} else {
+		query = fmt.Sprintf(
+			"SELECT torrent_hash, torrent_name, file_name, file_path, size FROM %s %s %s LIMIT ? OFFSET ?",
+			fromClause, whereClause, orderClause,
+		)
+	}
 	args = append(args, opts.PerPage, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -503,14 +533,26 @@ func (s *Storage) GetOrphanFiles(ctx context.Context, opts models.QueryOptions) 
 
 // GetTorrentStats returns global torrent statistics.
 // Returns COUNT files, COUNT DISTINCT torrent_hash, SUM size.
-func (s *Storage) GetTorrentStats(ctx context.Context) (*models.Stats, error) {
-	query := `
-		SELECT 
-			COUNT(*) as total_files,
-			COUNT(DISTINCT torrent_hash) as total_torrents,
-			COALESCE(SUM(size), 0) as total_size
-		FROM torrent_files
-	`
+// If unique is true, counts only unique files by relative_path.
+func (s *Storage) GetTorrentStats(ctx context.Context, unique bool) (*models.Stats, error) {
+	var query string
+	if unique {
+		query = `
+			SELECT 
+				COUNT(*) as total_files,
+				COUNT(DISTINCT torrent_hash) as total_torrents,
+				COALESCE(SUM(size), 0) as total_size
+			FROM (SELECT * FROM torrent_files WHERE id IN (SELECT MIN(id) FROM torrent_files GROUP BY relative_path))
+		`
+	} else {
+		query = `
+			SELECT 
+				COUNT(*) as total_files,
+				COUNT(DISTINCT torrent_hash) as total_torrents,
+				COALESCE(SUM(size), 0) as total_size
+			FROM torrent_files
+		`
+	}
 
 	var stats models.Stats
 	err := s.db.QueryRowContext(ctx, query).Scan(&stats.TotalFiles, &stats.TotalTorrents, &stats.TotalSize)
